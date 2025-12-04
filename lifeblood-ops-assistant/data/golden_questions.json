@@ -1,0 +1,10 @@
+{
+  "questions": [
+    {
+      "id": "placeholder_1",
+      "question": "Sample question placeholder",
+      "category": "general",
+      "expected_answer": "Sample answer placeholder"
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: ../../
+      dockerfile: infra/docker/Dockerfile.api
+    ports:
+      - "3001:3000"
+    environment:
+      - NODE_ENV=development
+    # volumes:
+    #   - ../../apps/api:/app
+
+  web:
+    build:
+      context: ../../
+      dockerfile: infra/docker/Dockerfile.web
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+    # volumes:
+    #   - ../../apps/web:/app
+    depends_on:
+      - api
+
+# networks:
+#   default:
+#     name: lifeblood-ops-network

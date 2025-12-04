@@ -1,0 +1,17 @@
+name: lifeblood-ops-assistant
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - pip
+  - pip:
+    - fastapi
+    - uvicorn[standard]
+    - pydantic-settings
+    - python-dotenv
+    - google-genai
+    - chromadb
+    - numpy
+    - pytest
+    - httpx
