@@ -73,7 +73,7 @@ class ChromaVectorStore(VectorStore):
             )
         )
         
-        # Get or create collection
+        # Get or create collection (reset if dimension mismatch)
         try:
             self.collection = self.client.get_collection(name=collection_name)
             logger.info(f"Loaded existing ChromaDB collection '{collection_name}'")
@@ -139,6 +139,33 @@ class ChromaVectorStore(VectorStore):
             logger.info(f"Successfully upserted {len(chunks)} chunks to ChromaDB")
             
         except Exception as e:
+            # Check if it's a dimension mismatch error
+            if "dimension" in str(e).lower():
+                logger.warning(f"Embedding dimension mismatch detected: {e}")
+                logger.info("Resetting collection for new embedding dimension...")
+                
+                # Delete and recreate collection with new dimension
+                self.client.delete_collection(name=self.collection_name)
+                self.collection = self.client.create_collection(
+                    name=self.collection_name,
+                    metadata={"description": "Lifeblood operations document chunks"}
+                )
+                logger.info(f"Recreated collection '{self.collection_name}'")
+                
+                # Retry the upsert
+                self.collection.upsert(
+                    ids=ids,
+                    embeddings=embeddings,
+                    documents=documents,
+                    metadatas=metadatas
+                )
+                
+                logger.info(f"Successfully upserted {len(chunks)} chunks to new ChromaDB collection")
+            else:
+                # Re-raise if it's not a dimension error
+                raise
+            
+        except Exception as e:
             logger.error(f"Error upserting chunks to ChromaDB: {e}")
             raise
     
@@ -157,6 +184,16 @@ class ChromaVectorStore(VectorStore):
             logger.warning("Empty query embedding provided")
             return []
         
+        # Check if collection has any documents
+        try:
+            collection_count = self.collection.count()
+            logger.debug(f"Collection '{self.collection_name}' has {collection_count} documents")
+            if collection_count == 0:
+                logger.warning("Collection is empty - no documents to search")
+                return []
+        except Exception as e:
+            logger.warning(f"Could not get collection count: {e}")
+        
         try:
             # Query ChromaDB
             results = self.collection.query(
@@ -165,27 +202,31 @@ class ChromaVectorStore(VectorStore):
                 include=['documents', 'metadatas', 'distances']
             )
             
+            logger.debug(f"ChromaDB raw results: {results}")
+            
             # ChromaDB returns nested lists even for single query
             documents = results.get('documents', [[]])[0]
-            metadatas = results.get('metadatas', [[]])[0]
+            metadatas = results.get('metadatas', [[]])[0] 
             distances = results.get('distances', [[]])[0]
             ids = results.get('ids', [[]])[0]
             
+            logger.debug(f"Extracted: {len(documents)} documents, {len(metadatas)} metadatas, {len(distances)} distances, {len(ids)} ids")
+            
             # Convert to our expected format
             query_results = []
-            for i, (doc_id, metadata, distance, chunk_id) in enumerate(zip(documents, metadatas, distances, ids)):
+            for i, (text, metadata, distance, chunk_id) in enumerate(zip(documents, metadatas, distances, ids)):
                 # Convert distance to similarity score (ChromaDB uses cosine distance)
                 # For cosine distance: similarity = 1 - distance, clamped to [0, 1]
                 score = max(0.0, min(1.0, 1.0 - distance))
                 
                 result = {
-                    'doc_id': metadata.get('doc_id', 'unknown'),
-                    'title': metadata.get('title'),
+                    'doc_id': metadata.get('doc_id', 'unknown') if metadata else 'unknown',
+                    'title': metadata.get('title') if metadata else None,
                     'chunk_id': chunk_id,
-                    'text': doc_id,  # In ChromaDB, 'documents' contains the actual text
+                    'text': text,  # In ChromaDB, 'documents' contains the actual text
                     'score': score,
-                    'start': metadata.get('start'),
-                    'end': metadata.get('end')
+                    'start': metadata.get('start') if metadata else None,
+                    'end': metadata.get('end') if metadata else None
                 }
                 query_results.append(result)
             

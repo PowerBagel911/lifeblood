@@ -12,6 +12,12 @@ class AskRequest(BaseModel):
         default="general",
         description="The response mode for the question"
     )
+    top_k: int = Field(
+        default=5,
+        description="Number of top document chunks to retrieve for context",
+        ge=1,
+        le=20
+    )
 
 
 class Citation(BaseModel):
@@ -27,11 +33,13 @@ class Citation(BaseModel):
 class AskResponse(BaseModel):
     """Response schema for question answers."""
     
+    question: str = Field(..., description="The original question that was asked")
     answer: str = Field(..., description="The generated answer to the question")
     citations: List[Citation] = Field(
         default_factory=list, 
         description="List of source citations supporting the answer"
     )
+    mode: str = Field(..., description="The response mode used")
     trace_id: str = Field(..., description="Request trace identifier")
 
 

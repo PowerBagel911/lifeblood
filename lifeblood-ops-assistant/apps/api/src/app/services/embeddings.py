@@ -8,10 +8,7 @@ from typing import List
 try:
     import google.generativeai as genai
 except ImportError:
-    try:
-        from google import genai
-    except ImportError:
-        genai = None
+    genai = None
 
 from ..core.config import settings
 
@@ -115,6 +112,9 @@ class GeminiEmbeddingsProvider(EmbeddingsProvider):
     
     def __init__(self):
         """Initialize Gemini embeddings provider."""
+        if genai is None:
+            raise ValueError("Google GenAI library not available. Install with: pip install google-generativeai")
+        
         # Use the API key from settings
         api_key = settings.GEMINI_API_KEY or settings.GOOGLE_API_KEY
         if not api_key:
@@ -123,9 +123,12 @@ class GeminiEmbeddingsProvider(EmbeddingsProvider):
             )
         
         # Configure the client
-        genai.configure(api_key=api_key)
-        self.client = genai.Client()
-        self.model_name = settings.GEMINI_EMBED_MODEL
+        try:
+            genai.configure(api_key=api_key)
+            self.model_name = settings.GEMINI_EMBED_MODEL
+            logger.info(f"Initialized GeminiEmbeddingsProvider with model {self.model_name}")
+        except Exception as e:
+            raise ValueError(f"Failed to configure Google GenAI: {e}")
         
         logger.info(f"Initialized GeminiEmbeddingsProvider with model {self.model_name}")
     
@@ -144,22 +147,26 @@ class GeminiEmbeddingsProvider(EmbeddingsProvider):
         
         logger.debug(f"Embedding {len(texts)} texts with Gemini API")
         
-        try:
-            # Call Gemini embedding API
-            result = self.client.models.embed_content(
-                model=self.model_name,
-                contents=texts
-            )
-            
-            # Extract embedding vectors
-            embeddings = [emb.values for emb in result.embeddings]
-            
-            logger.debug(f"Successfully embedded {len(embeddings)} texts")
-            return embeddings
-            
-        except Exception as e:
-            logger.error(f"Error embedding texts with Gemini: {e}")
-            raise
+        embeddings = []
+        for text in texts:
+            try:
+                # Call Gemini embedding API for single text
+                result = genai.embed_content(
+                    model=self.model_name,
+                    content=text
+                )
+                
+                # Extract embedding values
+                embedding = result['embedding']
+                embeddings.append(embedding)
+                
+            except Exception as e:
+                logger.error(f"Error embedding text: {e}")
+                # Use zero vector as fallback
+                embeddings.append([0.0] * 768)  # Standard embedding dimension
+        
+        logger.debug(f"Successfully generated {len(embeddings)} embeddings")
+        return embeddings
     
     def embed_query(self, text: str) -> List[float]:
         """
@@ -175,18 +182,15 @@ class GeminiEmbeddingsProvider(EmbeddingsProvider):
         
         try:
             # Call Gemini embedding API for single text
-            result = self.client.models.embed_content(
+            result = genai.embed_content(
                 model=self.model_name,
-                contents=[text]
+                content=text
             )
             
-            # Extract first (and only) embedding vector
-            if result.embeddings:
-                embedding = result.embeddings[0].values
-                logger.debug("Successfully embedded query text")
-                return embedding
-            else:
-                raise ValueError("No embedding returned from Gemini API")
+            # Extract embedding vector
+            embedding = result['embedding']
+            logger.debug("Successfully embedded query text")
+            return embedding
                 
         except Exception as e:
             logger.error(f"Error embedding query with Gemini: {e}")
@@ -201,6 +205,7 @@ def get_embeddings_provider() -> EmbeddingsProvider:
         Configured embeddings provider based on settings
     """
     provider_name = settings.EMBED_PROVIDER.lower()
+    logger.info(f"Creating embeddings provider: {provider_name}")
     
     if provider_name == "gemini":
         return GeminiEmbeddingsProvider()

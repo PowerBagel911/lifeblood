@@ -95,6 +95,7 @@ class RAGPipeline:
             logger.debug(f"Building prompt with {len(meaningful_chunks)} chunks")
             try:
                 prompt = build_rag_prompt(question.strip(), meaningful_chunks, mode)
+                logger.debug(f"Built prompt length: {len(prompt)} characters")
             except Exception as e:
                 logger.error(f"Error building prompt: {e}")
                 return {

@@ -8,10 +8,7 @@ from typing import List
 try:
     import google.generativeai as genai
 except ImportError:
-    try:
-        from google import genai
-    except ImportError:
-        genai = None
+    genai = None
 
 from ..core.config import settings
 
@@ -137,6 +134,9 @@ class GeminiLLMClient(LLMClient):
     
     def __init__(self):
         """Initialize Gemini LLM client."""
+        if genai is None:
+            raise ValueError("Google GenAI library not available. Install with: pip install google-generativeai")
+        
         # Use the API key from settings
         api_key = settings.GEMINI_API_KEY or settings.GOOGLE_API_KEY
         if not api_key:
@@ -145,11 +145,13 @@ class GeminiLLMClient(LLMClient):
             )
         
         # Configure the client
-        genai.configure(api_key=api_key)
-        self.client = genai.Client()
-        self.model_name = settings.GEMINI_MODEL
-        
-        logger.info(f"Initialized GeminiLLMClient with model {self.model_name}")
+        try:
+            genai.configure(api_key=api_key)
+            self.model_name = settings.GEMINI_MODEL
+            
+            logger.info(f"Initialized GeminiLLMClient with model {self.model_name}")
+        except Exception as e:
+            raise ValueError(f"Failed to configure Google GenAI: {e}")
     
     def generate(self, prompt: str) -> str:
         """
@@ -167,35 +169,17 @@ class GeminiLLMClient(LLMClient):
         logger.debug("Generating text with Gemini API")
         
         try:
-            # Call Gemini generation API
-            response = self.client.models.generate_content(
-                model=self.model_name,
-                contents=prompt
-            )
+            # Create GenerativeModel and generate content
+            model = genai.GenerativeModel(self.model_name)
+            response = model.generate_content(prompt)
             
             # Extract text from response
-            if hasattr(response, 'text') and response.text:
+            if response.text:
                 logger.debug("Successfully generated text with Gemini")
                 return response.text
-            
-            # Fallback: join candidate parts if direct text access fails
-            if hasattr(response, 'candidates') and response.candidates:
-                parts = []
-                for candidate in response.candidates:
-                    if hasattr(candidate, 'content') and candidate.content:
-                        if hasattr(candidate.content, 'parts') and candidate.content.parts:
-                            for part in candidate.content.parts:
-                                if hasattr(part, 'text') and part.text:
-                                    parts.append(part.text)
-                
-                if parts:
-                    result = ''.join(parts)
-                    logger.debug("Successfully extracted text from candidate parts")
-                    return result
-            
-            # If no text could be extracted
-            logger.warning("No text content found in Gemini response")
-            return "I apologize, but I couldn't generate a response to your prompt."
+            else:
+                logger.warning("No text content found in Gemini response")
+                return "I apologize, but I couldn't generate a response to your prompt."
             
         except Exception as e:
             logger.error(f"Error generating text with Gemini: {e}")
@@ -210,10 +194,11 @@ def get_llm_client() -> LLMClient:
         Configured LLM client based on settings
     """
     provider_name = settings.LLM_PROVIDER.lower()
+    logger.info(f"Creating LLM client: {provider_name}")
     
     if provider_name == "gemini":
         return GeminiLLMClient()
-    elif provider_name == "mock":
+    elif provider_name == "mock" or provider_name == "fake":
         return MockLLMClient()
     else:
         raise ValueError(f"Unknown LLM provider: {provider_name}")
