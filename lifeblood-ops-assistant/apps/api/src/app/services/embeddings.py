@@ -5,7 +5,13 @@ import logging
 from abc import ABC, abstractmethod
 from typing import List
 
-from google import genai
+try:
+    import google.generativeai as genai
+except ImportError:
+    try:
+        from google import genai
+    except ImportError:
+        genai = None
 
 from ..core.config import settings
 
