@@ -1,0 +1,7 @@
+Simple Text Document
+
+This is a plain text file that contains some sample content for testing the document loading functionality.
+
+The file contains multiple lines and paragraphs to ensure that the file loader can properly handle different text formats.
+
+This content will be used to verify that both markdown and text files are processed correctly by the file loading system.
