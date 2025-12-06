@@ -30,3 +30,9 @@ export interface AskResponse {
   mode: ResponseMode;
   trace_id: string;
 }
+
+export interface APIError {
+  message: string;
+  status: number;
+  trace_id?: string;
+}

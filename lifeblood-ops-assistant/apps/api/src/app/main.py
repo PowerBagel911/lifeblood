@@ -4,6 +4,7 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from .core.config import settings
 from .core.logging import setup_logging, setup_middleware
@@ -46,7 +47,21 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Set up middleware
+# Set up CORS middleware for frontend connection
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",  # Vite dev server
+        "http://127.0.0.1:3000",  # Alternative localhost
+        "http://localhost:5173",  # Alternative Vite port
+        "http://127.0.0.1:5173",  # Alternative Vite port
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Set up other middleware
 setup_middleware(app)
 
 # Include routers
