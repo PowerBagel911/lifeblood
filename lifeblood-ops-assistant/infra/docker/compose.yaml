@@ -5,26 +5,55 @@ services:
     build:
       context: ../../
       dockerfile: infra/docker/Dockerfile.api
+    container_name: lifeblood-api
     ports:
-      - "3001:3000"
+      - "8000:8000"
+    env_file:
+      - ../../.env
     environment:
-      - NODE_ENV=development
-    # volumes:
-    #   - ../../apps/api:/app
+      # Environment variables from .env will be loaded automatically
+      # Override specific ones for Docker if needed
+      - CHROMA_PERSIST_DIR=/app/.chroma
+      - APP_ENV=production
+      - LOG_LEVEL=INFO
+    volumes:
+      # Persist ChromaDB data
+      - chroma-data:/app/.chroma
+      # Mount documents for ingestion
+      - ../../data:/app/data
+      # Optional: mount for development hot-reload
+      # - ../../apps/api/src:/app/api/src
+    networks:
+      - lifeblood-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/docs"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
   web:
     build:
       context: ../../
       dockerfile: infra/docker/Dockerfile.web
+    container_name: lifeblood-web
     ports:
-      - "3000:3000"
+      - "3000:80"
     environment:
-      - NODE_ENV=development
-    # volumes:
-    #   - ../../apps/web:/app
+      # API endpoint configuration
+      - VITE_API_URL=http://localhost:8000
     depends_on:
-      - api
+      api:
+        condition: service_healthy
+    networks:
+      - lifeblood-network
+    restart: unless-stopped
 
-# networks:
-#   default:
-#     name: lifeblood-ops-network
+volumes:
+  chroma-data:
+    driver: local
+
+networks:
+  lifeblood-network:
+    driver: bridge

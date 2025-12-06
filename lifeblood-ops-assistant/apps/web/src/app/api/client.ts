@@ -4,7 +4,10 @@
 
 import { AskRequest, AskResponse } from '../../types';
 
-const API_BASE_URL = 'http://localhost:8000';
+// For Docker production: nginx proxies /api to backend
+// For local dev: direct connection to backend on port 8000
+const API_BASE_URL = import.meta.env.VITE_API_URL || 
+  (window.location.port === '3000' ? '/api' : 'http://localhost:8000');
 
 class APIError extends Error {
   constructor(

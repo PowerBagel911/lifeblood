@@ -1,21 +1,53 @@
-# Dockerfile for API
-# Placeholder Dockerfile for the API service
+# Dockerfile for FastAPI Backend
+FROM python:3.11-slim
 
-FROM node:18-alpine
-
+# Set working directory
 WORKDIR /app
 
-# Copy package files
-# COPY package*.json ./
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install dependencies
-# RUN npm ci --only=production
+# Copy requirements file
+# We'll extract dependencies from environment.yml
+COPY environment.yml .
 
-# Copy source code
-# COPY . .
+# Install Python dependencies
+RUN pip install --no-cache-dir \
+    fastapi \
+    uvicorn[standard] \
+    pydantic-settings \
+    python-dotenv \
+    google-genai \
+    chromadb \
+    numpy \
+    pytest \
+    httpx \
+    langchain \
+    langchain-core \
+    langchain-community \
+    langchain-google-genai \
+    langchain-chroma \
+    langchain-text-splitters
+
+# Copy application code
+COPY apps/api /app/api
+COPY data /app/data
+
+# Set Python path to find the app module
+ENV PYTHONPATH=/app/api/src
+
+# Create directory for ChromaDB persistence
+RUN mkdir -p /app/.chroma
 
 # Expose port
-EXPOSE 3000
+EXPOSE 8000
 
-# Start the application
-# CMD ["npm", "start"]
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8000/docs || exit 1
+
+# Run the application
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

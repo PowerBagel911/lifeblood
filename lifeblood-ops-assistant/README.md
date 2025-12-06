@@ -199,9 +199,146 @@ curl -X POST http://localhost:8000/ask \
 3. Type a question about blood donation operations
 4. Review the answer and citations
 
+## Docker Deployment 🐳
+
+### Quick Start with Docker
+
+The easiest way to run the entire application:
+
+**Windows (PowerShell):**
+```powershell
+cd infra/docker
+./start.ps1
+```
+
+**Linux/Mac:**
+```bash
+cd infra/docker
+chmod +x start.sh
+./start.sh
+```
+
+The script will:
+1. Check for `.env` configuration
+2. Let you choose production or development mode
+3. Build and start all services
+4. Display access URLs and next steps
+
+### Manual Docker Setup
+
+**Prerequisites:**
+- Docker Engine 20.10+
+- Docker Compose v2.0+
+
+**1. Configure environment:**
+```bash
+cp env.template .env
+# Edit .env and add your GEMINI_API_KEY
+```
+
+**2. Production deployment:**
+```bash
+cd infra/docker
+docker compose up --build -d
+```
+
+**3. Access the application:**
+- Web UI: http://localhost:3000
+- API: http://localhost:8000
+- API Docs: http://localhost:8000/docs
+
+**4. Ingest documents:**
+```bash
+curl -X POST http://localhost:8000/ingest
+```
+
+### Development with Hot Reload
+
+For local development with instant code updates:
+
+```bash
+cd infra/docker
+docker compose -f compose.dev.yaml up
+```
+
+Features:
+- ✅ Python changes reload automatically (FastAPI --reload)
+- ✅ React changes reload via Vite HMR
+- ✅ Source code mounted as volumes
+- ✅ Debug logging enabled
+
+### Docker Commands Cheat Sheet
+
+```bash
+# View logs
+docker compose logs -f          # All services
+docker compose logs -f api      # API only
+docker compose logs -f web      # Web only
+
+# Stop services
+docker compose down             # Stop and remove containers
+docker compose down -v          # Also remove volumes (resets database)
+
+# Restart services
+docker compose restart          # Restart all
+docker compose restart api      # Restart API only
+
+# Service status
+docker compose ps               # List running services
+docker compose top              # Show running processes
+
+# Execute commands
+docker compose exec api pytest                    # Run tests
+docker compose exec api bash                      # Shell into API
+docker compose exec api python -m pip list        # List packages
+
+# Rebuild after code changes
+docker compose up --build -d
+```
+
+### Docker Architecture
+
+The Docker setup includes:
+
+**Services:**
+- **api**: FastAPI backend (Python 3.11) on port 8000
+- **web**: React frontend (nginx) on port 3000
+
+**Volumes:**
+- **chroma-data**: Persistent vector database storage
+- **data/**: Document files for ingestion (bind mount)
+
+**Networking:**
+- Internal bridge network for service communication
+- Web container proxies `/api` requests to backend
+
+**Images:**
+- API: Custom Python image with all dependencies (~500MB)
+- Web: Multi-stage build (Node builder + nginx runtime) (~50MB)
+
+See [infra/docker/README.md](infra/docker/README.md) for detailed Docker documentation.
+
 ## Running the Application
 
-### Development Mode
+### Option 1: Docker (Recommended for Quick Start)
+
+**Production:**
+```bash
+cd infra/docker
+docker compose up -d
+```
+
+**Development (with hot-reload):**
+```bash
+cd infra/docker
+docker compose -f compose.dev.yaml up
+```
+
+**Access:**
+- Web: http://localhost:3000
+- API: http://localhost:8000/docs
+
+### Option 2: Local Development (Native)
 
 **Backend (Terminal 1):**
 ```bash
@@ -216,22 +353,22 @@ cd apps/web
 npm run dev
 ```
 
-### Using Docker Compose
+**Access:**
+- Web: http://localhost:5173 (Vite dev server)
+- API: http://localhost:8000/docs
 
-```bash
-docker compose -f infra/docker/compose.yaml up --build
-```
+### Option 3: Production Deployment
 
-This starts both API (port 3001) and Web (port 3000) services.
+For production deployments, Docker is recommended. See the **Docker Deployment** section above and [infra/docker/README.md](infra/docker/README.md) for:
+- Environment configuration
+- Secrets management
+- Scaling strategies
+- Monitoring setup
+- Cloud deployment examples (AWS, GCP, Azure)
 
-### Production Deployment
+## Usage
 
-See `infra/docker/` for Dockerfiles and `docs/architecture.md` for production considerations including:
-- API key security (use secrets management)
-- CORS configuration
-- Rate limiting
-- Authentication/authorization
-- Vector store persistence
+### Asking Questions
 - Monitoring and logging
 
 ## Usage
