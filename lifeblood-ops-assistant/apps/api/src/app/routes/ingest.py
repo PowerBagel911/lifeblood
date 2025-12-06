@@ -2,12 +2,13 @@
 
 import logging
 from fastapi import APIRouter, HTTPException, Request
+from langchain_core.documents import Document
 
 from ..core.schemas import IngestResponse
+from ..core.config import settings
 from ..utils.file_loaders import load_documents_from_directory
 from ..utils.chunking import chunk_documents
-from ..services.embeddings import get_embeddings_provider
-from ..services.retrieval import get_vector_store
+from ..services.langchain_factory import build_lc_embeddings, build_lc_vectorstore
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -54,32 +55,43 @@ async def ingest_document(request: Request):
         
         logger.info(f"Generated {len(chunks)} chunks from {len(documents)} documents")
         
-        # Step 3: Generate embeddings (use configured provider)
-        logger.debug("Generating embeddings for chunks")
-        embeddings_provider = get_embeddings_provider()
+        # Step 3: Build LangChain components
+        logger.debug("Building LangChain embeddings and vectorstore")
+        lc_embeddings = build_lc_embeddings(settings)
+        lc_vectorstore = build_lc_vectorstore(settings, lc_embeddings)
         
-        # Extract text from chunks for embedding
-        chunk_texts = [chunk['text'] for chunk in chunks]
-        embeddings = embeddings_provider.embed_texts(chunk_texts)
+        # Step 4: Convert chunks to LangChain Documents
+        logger.debug("Converting chunks to LangChain Documents")
+        lc_documents = []
+        for chunk in chunks:
+            # Create metadata dictionary with all available chunk info
+            metadata = {
+                "doc_id": chunk.get('doc_id', 'unknown'),
+                "chunk_id": chunk.get('chunk_id', 'unknown'),
+                "title": chunk.get('title', ''),
+                "start": chunk.get('start', 0),
+                "end": chunk.get('end', 0)
+            }
+            
+            # Create LangChain Document
+            lc_doc = Document(
+                page_content=chunk['text'],
+                metadata=metadata
+            )
+            lc_documents.append(lc_doc)
         
-        if len(embeddings) != len(chunks):
-            raise ValueError(f"Embedding count mismatch: {len(embeddings)} embeddings for {len(chunks)} chunks")
+        logger.debug(f"Converted {len(lc_documents)} chunks to LangChain Documents")
         
-        logger.info(f"Generated embeddings for {len(chunks)} chunks")
+        # Step 5: Add documents to LangChain vectorstore
+        logger.debug("Adding documents to LangChain Chroma vectorstore")
+        lc_vectorstore.add_documents(lc_documents)
         
-        # Step 4: Upsert into vector store
-        logger.debug("Upserting chunks into vector store")
-        vector_store = get_vector_store()
-        vector_store.upsert_chunks(chunks, embeddings)
-        
-        # Verify indexing by counting
-        final_count = vector_store.count() if hasattr(vector_store, 'count') else len(chunks)
-        logger.info(f"Successfully indexed {len(chunks)} chunks into vector store (total: {final_count})")
+        logger.info(f"Successfully indexed {len(lc_documents)} documents into LangChain vectorstore")
         
         # Return success response
         return IngestResponse(
             indexed_docs=len(documents),
-            indexed_chunks=len(chunks),
+            indexed_chunks=len(lc_documents),
             trace_id=trace_id
         )
         

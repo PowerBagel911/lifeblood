@@ -1,5 +1,6 @@
 """Configuration management using Pydantic settings."""
 
+import os
 from typing import Optional
 from pydantic import Field, validator
 from pydantic_settings import BaseSettings
@@ -54,11 +55,29 @@ class Settings(BaseSettings):
                     "you must set either GEMINI_API_KEY or GOOGLE_API_KEY environment variable."
                 )
             
+            # If both keys are set, prefer GEMINI_API_KEY and warn (don't error)
             if self.GEMINI_API_KEY and self.GOOGLE_API_KEY:
-                raise ValueError(
-                    "Gemini API configuration error: Set either GEMINI_API_KEY or GOOGLE_API_KEY, not both."
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(
+                    "Both GEMINI_API_KEY and GOOGLE_API_KEY are set. Using GEMINI_API_KEY."
                 )
+    
+    def setup_api_key_compatibility(self) -> None:
+        """Set up compatibility bridge between GEMINI_API_KEY and GOOGLE_API_KEY."""
+        # Prefer GEMINI_API_KEY if available, otherwise use GOOGLE_API_KEY
+        # Set up os.environ["GOOGLE_API_KEY"] for LangChain compatibility
+        primary_key = self.GEMINI_API_KEY or self.GOOGLE_API_KEY
+        
+        if primary_key:
+            os.environ["GOOGLE_API_KEY"] = primary_key
+            # Ensure both settings fields are set for internal consistency
+            if not self.GOOGLE_API_KEY:
+                self.GOOGLE_API_KEY = primary_key
 
 
 # Global settings instance
 settings = Settings()
+
+# Set up API key compatibility bridge at startup
+settings.setup_api_key_compatibility()

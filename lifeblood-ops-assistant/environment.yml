@@ -15,3 +15,9 @@ dependencies:
     - numpy
     - pytest
     - httpx
+    - langchain
+    - langchain-core
+    - langchain-community
+    - langchain-google-genai
+    - langchain-chroma
+    - langchain-text-splitters

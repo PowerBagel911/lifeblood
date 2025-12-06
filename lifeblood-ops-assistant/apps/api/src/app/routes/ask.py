@@ -4,10 +4,9 @@ import logging
 from fastapi import APIRouter, HTTPException, Request
 
 from ..core.schemas import AskRequest, AskResponse
+from ..core.config import settings
 from ..services.rag_pipeline import RAGPipeline
-from ..services.embeddings import get_embeddings_provider
-from ..services.retrieval import get_vector_store
-from ..services.llm_client import get_llm_client
+from ..services.langchain_factory import build_lc_embeddings, build_lc_vectorstore, build_lc_llm
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -33,37 +32,37 @@ async def ask_question(request: Request, ask_request: AskRequest):
                 }
             )
         
-        # Step 2: Build dependencies from config
-        logger.debug(f"Building RAG pipeline dependencies [trace_id: {trace_id}]")
+        # Step 2: Build LangChain components from config
+        logger.debug(f"Building LangChain RAG pipeline components [trace_id: {trace_id}]")
         
         try:
-            # Get vector store (Chroma)
-            logger.debug(f"Getting vector store [trace_id: {trace_id}]")
-            vector_store = get_vector_store(persist_dir=".chroma")
+            # Build LangChain embeddings
+            logger.debug(f"Building LangChain embeddings [trace_id: {trace_id}]")
+            lc_embeddings = build_lc_embeddings(settings)
             
-            # Get embeddings provider (Gemini or Fake based on config)
-            logger.debug(f"Getting embeddings provider [trace_id: {trace_id}]")
-            embeddings_provider = get_embeddings_provider()
+            # Build LangChain vector store
+            logger.debug(f"Building LangChain vector store [trace_id: {trace_id}]")
+            lc_vectorstore = build_lc_vectorstore(settings, lc_embeddings)
             
-            # Get LLM client (Gemini or Mock based on config)
-            logger.debug(f"Getting LLM client [trace_id: {trace_id}]")
-            llm_client = get_llm_client()
+            # Build LangChain LLM
+            logger.debug(f"Building LangChain LLM [trace_id: {trace_id}]")
+            lc_llm = build_lc_llm(settings)
             
         except Exception as e:
-            logger.error(f"Failed to build dependencies: {str(e)} [trace_id: {trace_id}]")
+            logger.error(f"Failed to build LangChain components: {str(e)} [trace_id: {trace_id}]")
             raise HTTPException(
                 status_code=500,
                 detail={
-                    "message": f"Service configuration error: {str(e)}",
+                    "message": f"LangChain configuration error: {str(e)}",
                     "trace_id": trace_id
                 }
             )
         
-        # Step 3: Initialize RAG pipeline with dependencies
+        # Step 3: Initialize RAG pipeline with LangChain components
         rag_pipeline = RAGPipeline(
-            vector_store=vector_store,
-            embeddings_provider=embeddings_provider,
-            llm_client=llm_client
+            vectorstore=lc_vectorstore,
+            embeddings=lc_embeddings,
+            llm=lc_llm
         )
         
         # Step 4: Call RAG pipeline

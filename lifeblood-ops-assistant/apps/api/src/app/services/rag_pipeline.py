@@ -1,41 +1,43 @@
 """RAG (Retrieval-Augmented Generation) pipeline implementation."""
 
 import logging
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Tuple
 
-from .embeddings import EmbeddingsProvider
-from .retrieval import VectorStore
-from .llm_client import LLMClient
+from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
+from langchain_chroma import Chroma
+from langchain_core.documents import Document
+
 from .prompts import build_rag_prompt
+from ..core.config import Settings
 
 logger = logging.getLogger(__name__)
 
 
 class RAGPipeline:
     """
-    RAG pipeline that orchestrates query embedding, document retrieval, 
-    prompt building, and LLM generation.
+    RAG pipeline that orchestrates document retrieval, prompt building, 
+    and LLM generation using LangChain components.
     """
     
     def __init__(
         self,
-        vector_store: VectorStore,
-        embeddings_provider: EmbeddingsProvider,
-        llm_client: LLMClient
+        vectorstore: Chroma,
+        embeddings: GoogleGenerativeAIEmbeddings,
+        llm: ChatGoogleGenerativeAI
     ):
         """
-        Initialize RAG pipeline with injected dependencies.
+        Initialize RAG pipeline with LangChain components.
         
         Args:
-            vector_store: Vector store for document retrieval
-            embeddings_provider: Provider for text embeddings
-            llm_client: LLM client for text generation
+            vectorstore: LangChain Chroma vector store
+            embeddings: LangChain Google GenerativeAI embeddings
+            llm: LangChain Google GenerativeAI chat model
         """
-        self.vector_store = vector_store
-        self.embeddings_provider = embeddings_provider
-        self.llm_client = llm_client
+        self.vectorstore = vectorstore
+        self.embeddings = embeddings
+        self.llm = llm
         
-        logger.info("RAG pipeline initialized with injected dependencies")
+        logger.info("RAG pipeline initialized with LangChain components")
     
     def ask(self, question: str, mode: str = "general", top_k: int = 5) -> Dict[str, Any]:
         """
@@ -59,42 +61,56 @@ class RAGPipeline:
                     "citations": []
                 }
             
-            # Step 1: Embed the query
-            logger.debug("Embedding query")
+            # Step 1: Retrieve documents with scores using LangChain
+            logger.debug(f"Retrieving top {top_k} documents with relevance scores")
             try:
-                query_embedding = self.embeddings_provider.embed_query(question.strip())
+                # Try similarity_search_with_relevance_scores first (preferred)
+                if hasattr(self.vectorstore, 'similarity_search_with_relevance_scores'):
+                    retrieved_docs_with_scores = self.vectorstore.similarity_search_with_relevance_scores(
+                        question.strip(), k=top_k
+                    )
+                    logger.debug(f"Retrieved {len(retrieved_docs_with_scores)} documents with relevance scores")
+                else:
+                    # Fallback to similarity_search_with_score
+                    retrieved_docs_with_scores = self.vectorstore.similarity_search_with_score(
+                        question.strip(), k=top_k
+                    )
+                    logger.debug(f"Retrieved {len(retrieved_docs_with_scores)} documents with scores (fallback method)")
+                
             except Exception as e:
-                logger.error(f"Error embedding query: {e}")
-                return {
-                    "answer": "I encountered an error processing your question. Please try again.",
-                    "citations": []
-                }
-            
-            # Step 2: Retrieve relevant chunks
-            logger.debug(f"Retrieving top {top_k} chunks")
-            try:
-                retrieved_chunks = self.vector_store.query(query_embedding, top_k=top_k)
-            except Exception as e:
-                logger.error(f"Error retrieving chunks: {e}")
+                logger.error(f"Error retrieving documents: {e}")
+                # Check if it's because no data is indexed yet
+                if "does not exist" in str(e).lower() or "not found" in str(e).lower() or "empty" in str(e).lower():
+                    logger.info("No data indexed yet, returning fallback")
+                    return {
+                        "answer": "I don't have enough information in the docs to answer that. Please make sure documents have been ingested using the /ingest endpoint first.",
+                        "citations": []
+                    }
                 return {
                     "answer": "I encountered an error searching for relevant information. Please try again.",
                     "citations": []
                 }
             
-            # Step 3: Check if we have meaningful results
-            meaningful_chunks = self._filter_meaningful_chunks(retrieved_chunks)
+            # Step 2: Convert LangChain Documents to citations
+            logger.debug(f"Converting {len(retrieved_docs_with_scores)} LangChain documents to citations")
+            citations = self._convert_langchain_docs_to_citations(retrieved_docs_with_scores)
             
-            if not meaningful_chunks:
-                logger.info("No meaningful chunks retrieved, returning fallback")
+            # Step 3: Filter meaningful results
+            meaningful_citations = self._filter_meaningful_citations(citations)
+            
+            if not meaningful_citations:
+                logger.info("No meaningful citations found, returning fallback")
                 return {
                     "answer": "I don't have enough information in the docs to answer that.",
                     "citations": []
                 }
             
-            # Step 4: Build prompt with retrieved chunks
-            logger.debug(f"Building prompt with {len(meaningful_chunks)} chunks")
+            # Step 4: Convert citations to chunks format for existing prompt builder
+            logger.debug(f"Building prompt with {len(meaningful_citations)} citations")
+            chunks_for_prompt = self._citations_to_chunks(meaningful_citations)
+            
             try:
-                prompt = build_rag_prompt(question.strip(), meaningful_chunks, mode)
+                prompt = build_rag_prompt(question.strip(), chunks_for_prompt, mode)
                 logger.debug(f"Built prompt length: {len(prompt)} characters")
             except Exception as e:
                 logger.error(f"Error building prompt: {e}")
@@ -103,10 +119,21 @@ class RAGPipeline:
                     "citations": []
                 }
             
-            # Step 5: Generate answer using LLM
-            logger.debug("Generating LLM response")
+            # Step 5: Generate answer using LangChain LLM
+            logger.debug("Generating LLM response with LangChain")
             try:
-                llm_response = self.llm_client.generate(prompt)
+                response = self.llm.invoke(prompt)
+                
+                # Extract text from LangChain response
+                if hasattr(response, 'text') and response.text:
+                    llm_response = response.text
+                elif hasattr(response, 'content') and response.content:
+                    llm_response = response.content
+                else:
+                    llm_response = str(response)
+                    
+                logger.debug("Successfully generated response with LangChain LLM")
+                
             except Exception as e:
                 logger.error(f"Error generating LLM response: {e}")
                 return {
@@ -114,15 +141,13 @@ class RAGPipeline:
                     "citations": []
                 }
             
-            # Step 6: Build citations from meaningful chunks
-            citations = self._build_citations(meaningful_chunks)
-            
+            # Step 6: Return final result
             result = {
                 "answer": llm_response.strip() if llm_response else "I was unable to generate a response.",
-                "citations": citations
+                "citations": meaningful_citations
             }
             
-            logger.info(f"RAG pipeline completed successfully with {len(citations)} citations")
+            logger.info(f"RAG pipeline completed successfully with {len(meaningful_citations)} citations")
             return result
             
         except Exception as e:
@@ -132,70 +157,100 @@ class RAGPipeline:
                 "citations": []
             }
     
-    def _filter_meaningful_chunks(self, chunks: List[Dict[str, Any]], min_score: float = 0.01) -> List[Dict[str, Any]]:
+    def _convert_langchain_docs_to_citations(self, docs_with_scores: List[Tuple[Document, float]]) -> List[Dict[str, Any]]:
         """
-        Filter chunks to only include meaningful results.
+        Convert LangChain Documents with scores to Citation format.
         
         Args:
-            chunks: Retrieved chunks with scores
-            min_score: Minimum similarity score threshold
-            
-        Returns:
-            List of chunks that meet meaningfulness criteria
-        """
-        if not chunks:
-            return []
-        
-        meaningful_chunks = []
-        
-        for chunk in chunks:
-            # Check if chunk has required fields
-            if not isinstance(chunk, dict):
-                continue
-                
-            text = chunk.get('text', '').strip()
-            if not text:
-                continue
-            
-            # Check similarity score
-            score = chunk.get('score', 0.0)
-            if score < min_score:
-                logger.debug(f"Filtering out chunk with low score: {score} (min: {min_score})")
-                continue
-            
-            # Check text length (too short texts are usually not helpful)
-            if len(text) < 20:
-                logger.debug("Filtering out chunk with very short text")
-                continue
-            
-            meaningful_chunks.append(chunk)
-        
-        logger.debug(f"Filtered {len(meaningful_chunks)} meaningful chunks from {len(chunks)} total")
-        return meaningful_chunks
-    
-    def _build_citations(self, chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """
-        Build citation objects from retrieved chunks.
-        
-        Args:
-            chunks: List of meaningful chunks
+            docs_with_scores: List of tuples (Document, score) from LangChain similarity search
             
         Returns:
             List of citation dictionaries
         """
         citations = []
         
-        for chunk in chunks:
+        for doc, score in docs_with_scores:
             citation = {
-                "doc_id": chunk.get('doc_id', 'unknown'),
-                "title": chunk.get('title'),
-                "chunk_id": chunk.get('chunk_id'),
-                "snippet": self._create_snippet(chunk.get('text', '')),
-                "score": chunk.get('score', 0.0)
+                "doc_id": doc.metadata.get('doc_id', 'unknown'),
+                "title": doc.metadata.get('title'),
+                "chunk_id": doc.metadata.get('chunk_id'),
+                "snippet": self._create_snippet(doc.page_content),
+                "score": score
             }
             citations.append(citation)
         
+        logger.debug(f"Converted {len(citations)} LangChain documents to citations")
         return citations
+
+    def _filter_meaningful_citations(self, citations: List[Dict[str, Any]], min_score: float = 0.01) -> List[Dict[str, Any]]:
+        """
+        Filter citations to only include meaningful results.
+        
+        Args:
+            citations: List of citations with scores
+            min_score: Minimum relevance score threshold
+            
+        Returns:
+            List of citations that meet meaningfulness criteria
+        """
+        if not citations:
+            return []
+        
+        meaningful_citations = []
+        
+        for citation in citations:
+            # Check if citation has required fields
+            if not isinstance(citation, dict):
+                continue
+                
+            snippet = citation.get('snippet', '').strip()
+            if not snippet:
+                continue
+            
+            # Check relevance score
+            score = citation.get('score', 0.0)
+            if score < min_score:
+                logger.debug(f"Filtering out citation with low score: {score} (min: {min_score})")
+                continue
+            
+            # Check snippet length (too short snippets are usually not helpful)
+            if len(snippet) < 20:
+                logger.debug("Filtering out citation with very short snippet")
+                continue
+            
+            meaningful_citations.append(citation)
+        
+        logger.debug(f"Filtered {len(meaningful_citations)} meaningful citations from {len(citations)} total")
+        return meaningful_citations
+
+    def _citations_to_chunks(self, citations: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Convert citations back to chunks format for prompt building.
+        
+        Args:
+            citations: List of citation dictionaries
+            
+        Returns:
+            List of chunk dictionaries compatible with build_rag_prompt
+        """
+        chunks = []
+        
+        for citation in citations:
+            chunk = {
+                'doc_id': citation.get('doc_id', 'unknown'),
+                'chunk_id': citation.get('chunk_id'),
+                'title': citation.get('title'),
+                'text': citation.get('snippet', ''),
+                'start': citation.get('start'),
+                'end': citation.get('end'),
+                'score': citation.get('score', 0.0)
+            }
+            chunks.append(chunk)
+        
+        return chunks
+
+    # Note: _filter_meaningful_chunks and _build_citations methods removed 
+    # as they're replaced by _filter_meaningful_citations and _convert_langchain_docs_to_citations
     
     def _create_snippet(self, text: str, max_length: int = 200) -> str:
         """
@@ -230,31 +285,36 @@ class RAGPipeline:
     
     def get_pipeline_status(self) -> Dict[str, Any]:
         """
-        Get status information about the pipeline components.
+        Get status information about the LangChain pipeline components.
         
         Returns:
             Dictionary with component status information
         """
         status = {
-            "vector_store": {
-                "type": type(self.vector_store).__name__,
-                "available": self.vector_store is not None
+            "vectorstore": {
+                "type": type(self.vectorstore).__name__,
+                "available": self.vectorstore is not None,
+                "collection_name": getattr(self.vectorstore, '_collection_name', 'unknown')
             },
-            "embeddings_provider": {
-                "type": type(self.embeddings_provider).__name__,
-                "available": self.embeddings_provider is not None
+            "embeddings": {
+                "type": type(self.embeddings).__name__,
+                "available": self.embeddings is not None,
+                "model": getattr(self.embeddings, 'model', 'unknown')
             },
-            "llm_client": {
-                "type": type(self.llm_client).__name__,
-                "available": self.llm_client is not None
+            "llm": {
+                "type": type(self.llm).__name__,
+                "available": self.llm is not None,
+                "model": getattr(self.llm, 'model_name', 'unknown')
             }
         }
         
-        # Try to get vector store count if available
+        # Try to get document count from vectorstore if available
         try:
-            if hasattr(self.vector_store, 'count'):
-                status["vector_store"]["document_count"] = self.vector_store.count()
-        except Exception:
-            pass
+            if hasattr(self.vectorstore, '_collection') and self.vectorstore._collection:
+                collection = self.vectorstore._collection
+                if hasattr(collection, 'count'):
+                    status["vectorstore"]["document_count"] = collection.count()
+        except Exception as e:
+            logger.debug(f"Could not get document count: {e}")
         
         return status
