@@ -4,7 +4,7 @@
 
 ## Overview
 
-Lifeblood Ops Assistant is a knowledge management system that combines Large Language Models (LLMs) with a vector database to deliver accurate, contextual responses about blood bank operations. The system ingests organizational documentation, indexes it using semantic embeddings, and generates AI responses grounded in your actual documents—reducing hallucinations and ensuring answers are backed by authoritative sources.
+Lifeblood Ops Assistant is a knowledge management system that combines Large Language Models (LLMs) with a vector database to deliver accurate, contextual responses about blood bank operations. The system ingests organizational documentation, indexes it using semantic embeddings, and generates AI responses grounded in your actual documents - reducing hallucinations and ensuring answers are backed by authoritative sources.
 
 **Key Capabilities:**
 - **Document-Grounded Responses**: All answers cite specific source documents
@@ -440,18 +440,6 @@ For detailed security analysis, see [docs/threat-model-lite.md](docs/threat-mode
 - [ ] **Scalability**: Migrate to production vector database (Pinecone, Weaviate)
 - [ ] **Fine-tuning**: Experiment with domain-specific model fine-tuning
 
-## Contributing
-
-Contributions are welcome! This is a prototype system demonstrating RAG best practices.
-
-**Development Guidelines:**
-1. Follow existing code structure and naming conventions
-2. Add tests for new features (`apps/api/tests/`)
-3. Update documentation for API changes
-4. Use type hints in Python and TypeScript
-5. Follow PEP 8 for Python code
-6. Run linters before committing: `pytest` and `npm run lint`
-
 ## License
 
 This project is for educational and demonstration purposes. Please review licensing requirements for dependencies (LangChain, ChromaDB, Google Gemini) before commercial use.
@@ -466,4 +454,4 @@ This project is for educational and demonstration purposes. Please review licens
 
 ---
 
-**Built with ❤️ for blood donation operations teams**
+**Built with ❤️**
