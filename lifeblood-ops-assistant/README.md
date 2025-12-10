@@ -7,6 +7,7 @@
 Lifeblood Ops Assistant is a knowledge management system that combines Large Language Models (LLMs) with a vector database to deliver accurate, contextual responses about blood bank operations. The system ingests organizational documentation, indexes it using semantic embeddings, and generates AI responses grounded in your actual documents - reducing hallucinations and ensuring answers are backed by authoritative sources.
 
 **Key Capabilities:**
+
 - **Document-Grounded Responses**: All answers cite specific source documents
 - **Two Response Modes**: Choose between comprehensive or concise answers
 - **Real-Time Document Ingestion**: Add new knowledge base content on demand
@@ -81,6 +82,7 @@ For detailed architecture decisions, see [docs/architecture.md](docs/architectur
 ## Technology Stack
 
 **Backend:**
+
 - Python 3.11
 - FastAPI + Uvicorn
 - LangChain (RAG orchestration)
@@ -90,6 +92,7 @@ For detailed architecture decisions, see [docs/architecture.md](docs/architectur
 - pytest (testing)
 
 **Frontend:**
+
 - React 18
 - TypeScript
 - Vite (build tool)
@@ -97,6 +100,7 @@ For detailed architecture decisions, see [docs/architecture.md](docs/architectur
 - Lucide React (icons)
 
 **Infrastructure:**
+
 - Docker & Docker Compose
 - Conda (Python environment management)
 
@@ -164,6 +168,7 @@ curl -X POST http://localhost:8000/ingest
 ```
 
 You should see a response like:
+
 ```json
 {
   "indexed_docs": 5,
@@ -206,12 +211,14 @@ curl -X POST http://localhost:8000/ask \
 The easiest way to run the entire application:
 
 **Windows (PowerShell):**
+
 ```powershell
 cd infra/docker
 ./start.ps1
 ```
 
 **Linux/Mac:**
+
 ```bash
 cd infra/docker
 chmod +x start.sh
@@ -219,6 +226,7 @@ chmod +x start.sh
 ```
 
 The script will:
+
 1. Check for `.env` configuration
 2. Let you choose production or development mode
 3. Build and start all services
@@ -227,27 +235,32 @@ The script will:
 ### Manual Docker Setup
 
 **Prerequisites:**
+
 - Docker Engine 20.10+
 - Docker Compose v2.0+
 
 **1. Configure environment:**
+
 ```bash
 cp env.template .env
 # Edit .env and add your GEMINI_API_KEY
 ```
 
 **2. Production deployment:**
+
 ```bash
 cd infra/docker
 docker compose up --build -d
 ```
 
 **3. Access the application:**
+
 - Web UI: http://localhost:3000
 - API: http://localhost:8000
 - API Docs: http://localhost:8000/docs
 
 **4. Ingest documents:**
+
 ```bash
 curl -X POST http://localhost:8000/ingest
 ```
@@ -262,6 +275,7 @@ docker compose -f compose.dev.yaml up
 ```
 
 Features:
+
 - ✅ Python changes reload automatically (FastAPI --reload)
 - ✅ React changes reload via Vite HMR
 - ✅ Source code mounted as volumes
@@ -301,18 +315,22 @@ docker compose up --build -d
 The Docker setup includes:
 
 **Services:**
+
 - **api**: FastAPI backend (Python 3.11) on port 8000
 - **web**: React frontend (nginx) on port 3000
 
 **Volumes:**
+
 - **chroma-data**: Persistent vector database storage
 - **data/**: Document files for ingestion (bind mount)
 
 **Networking:**
+
 - Internal bridge network for service communication
 - Web container proxies `/api` requests to backend
 
 **Images:**
+
 - API: Custom Python image with all dependencies (~500MB)
 - Web: Multi-stage build (Node builder + nginx runtime) (~50MB)
 
@@ -323,24 +341,28 @@ See [infra/docker/README.md](infra/docker/README.md) for detailed Docker documen
 ### Option 1: Docker (Recommended for Quick Start)
 
 **Production:**
+
 ```bash
 cd infra/docker
 docker compose up -d
 ```
 
 **Development (with hot-reload):**
+
 ```bash
 cd infra/docker
 docker compose -f compose.dev.yaml up
 ```
 
 **Access:**
+
 - Web: http://localhost:3000
 - API: http://localhost:8000/docs
 
 ### Option 2: Local Development (Native)
 
 **Backend (Terminal 1):**
+
 ```bash
 conda activate lifeblood-ops-assistant
 cd apps/api
@@ -348,18 +370,21 @@ uvicorn src.app.main:app --reload --port 8000
 ```
 
 **Frontend (Terminal 2):**
+
 ```bash
 cd apps/web
 npm run dev
 ```
 
 **Access:**
+
 - Web: http://localhost:5173 (Vite dev server)
 - API: http://localhost:8000/docs
 
 ### Option 3: Production Deployment
 
 For production deployments, Docker is recommended. See the **Docker Deployment** section above and [infra/docker/README.md](infra/docker/README.md) for:
+
 - Environment configuration
 - Secrets management
 - Scaling strategies
@@ -369,6 +394,7 @@ For production deployments, Docker is recommended. See the **Docker Deployment**
 ## Usage
 
 ### Asking Questions
+
 - Monitoring and logging
 
 ## Usage
@@ -376,12 +402,14 @@ For production deployments, Docker is recommended. See the **Docker Deployment**
 ### Asking Questions
 
 **Via Web UI:**
+
 1. Select response mode: `comprehensive` or `concise`
 2. Type your question
 3. View answer with inline citations
 4. Expand the Sources panel to see full citation details
 
 **Via API:**
+
 ```bash
 curl -X POST http://localhost:8000/ask \
   -H "Content-Type: application/json" \
@@ -393,6 +421,7 @@ curl -X POST http://localhost:8000/ask \
 ```
 
 **Response:**
+
 ```json
 {
   "question": "How should plasma be handled after collection?",
@@ -419,6 +448,7 @@ curl -X POST http://localhost:8000/ingest
 ```
 
 The system will:
+
 1. Load all documents from `data/docs/`
 2. Chunk them into ~2000 character segments with 200 character overlap
 3. Generate embeddings using Gemini
@@ -464,6 +494,7 @@ pytest
 ```
 
 Run specific test files:
+
 ```bash
 pytest tests/test_rag_pipeline.py -v
 pytest tests/test_chunking.py -v
@@ -476,6 +507,7 @@ pytest tests/test_chunking.py -v
 Ask a question to the knowledge base.
 
 **Request Body:**
+
 ```typescript
 {
   question: string;      // Question text (required)
@@ -485,6 +517,7 @@ Ask a question to the knowledge base.
 ```
 
 **Response:**
+
 ```typescript
 {
   question: string;
@@ -500,6 +533,7 @@ Ask a question to the knowledge base.
 Ingest documents from `data/docs/` into the vector database.
 
 **Response:**
+
 ```typescript
 {
   indexed_docs: number;    // Number of documents processed
@@ -512,14 +546,14 @@ Ingest documents from `data/docs/` into the vector database.
 
 All configuration is environment-based. See `env.template` for available options:
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `GEMINI_API_KEY` | Google Gemini API key | (required) |
-| `GEMINI_MODEL` | LLM model for generation | `gemini-1.5-flash` |
-| `GEMINI_EMBED_MODEL` | Embedding model | `models/text-embedding-004` |
-| `LLM_PROVIDER` | LLM provider name | `gemini` |
-| `EMBED_PROVIDER` | Embedding provider | `gemini` |
-| `CHROMA_PERSIST_DIR` | ChromaDB storage path | `.chroma` |
+| Variable               | Description              | Default                       |
+| ---------------------- | ------------------------ | ----------------------------- |
+| `GEMINI_API_KEY`     | Google Gemini API key    | (required)                    |
+| `GEMINI_MODEL`       | LLM model for generation | `gemini-1.5-flash`          |
+| `GEMINI_EMBED_MODEL` | Embedding model          | `models/text-embedding-004` |
+| `LLM_PROVIDER`       | LLM provider name        | `gemini`                    |
+| `EMBED_PROVIDER`     | Embedding provider       | `gemini`                    |
+| `CHROMA_PERSIST_DIR` | ChromaDB storage path    | `.chroma`                   |
 
 ## Safety & Ethics
 
@@ -549,33 +583,27 @@ For detailed security analysis, see [docs/threat-model-lite.md](docs/threat-mode
 ## Troubleshooting
 
 **API key errors:**
+
 - Verify `GEMINI_API_KEY` is set in `.env`
 - Ensure only one API key variable is set (not both `GEMINI_API_KEY` and `GOOGLE_API_KEY`)
 
 **No documents ingested:**
+
 - Check that files exist in `data/docs/`
 - Ensure files are `.md` or `.txt` format
 - Review API logs for file loading errors
 
 **Empty responses:**
+
 - Run `/ingest` endpoint to populate vector database
 - Check ChromaDB persistence directory exists
 - Verify embedding model is accessible
 
 **Frontend connection issues:**
+
 - Ensure API is running on port 8000
 - Check CORS configuration in `main.py`
 - Verify API client URL in `apps/web/src/app/api/client.ts`
-
-## Roadmap
-
-- [ ] **Multi-modal Support**: Add PDF and Word document loaders
-- [ ] **Advanced RAG**: Implement query rewriting and multi-hop reasoning
-- [ ] **Authentication**: Add user authentication and role-based access control
-- [ ] **Evaluation**: Build automated RAG evaluation pipeline with golden questions
-- [ ] **Production Monitoring**: Integrate observability tools (Prometheus, Grafana)
-- [ ] **Scalability**: Migrate to production vector database (Pinecone, Weaviate)
-- [ ] **Fine-tuning**: Experiment with domain-specific model fine-tuning
 
 ## License
 
