@@ -89,7 +89,6 @@ For detailed architecture decisions, see [docs/architecture.md](docs/architectur
 - ChromaDB (vector database)
 - Google Gemini API (LLM + embeddings)
 - Pydantic (data validation)
-- pytest (testing)
 
 **Frontend:**
 
