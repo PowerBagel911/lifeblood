@@ -7,7 +7,6 @@ Modern React + TypeScript frontend for the Lifeblood Operations RAG system.
 - 🩸 **Medical AI Chat Interface** - Ask questions about blood donation procedures
 - 📝 **Multiple Response Modes** - General, Checklist, and Plain English formats
 - 📚 **Source Citations** - View document sources with relevance scores
-- 🎨 **Modern UI** - Clean, responsive design with Tailwind CSS
 - ⚡ **Fast Development** - Vite for instant hot reloading
 
 ## Components
