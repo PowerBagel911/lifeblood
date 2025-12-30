@@ -98,11 +98,6 @@ For detailed architecture decisions, see [docs/architecture.md](docs/architectur
 - Tailwind CSS
 - Lucide React (icons)
 
-**Infrastructure:**
-
-- Docker & Docker Compose
-- Conda (Python environment management)
-
 ## Prerequisites
 
 - **Python 3.11+** via [Conda](https://docs.conda.io/en/latest/miniconda.html) or [Anaconda](https://www.anaconda.com/products/distribution)
